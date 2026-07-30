@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="96" fill="#1e3a5f"/>
+  <path d="M128 256c0-70.7 57.3-128 128-128s128 57.3 128 128" stroke="#0d9488" stroke-width="28" stroke-linecap="round"/>
+  <path d="M256 128v256" stroke="#fff" stroke-width="28" stroke-linecap="round"/>
+  <path d="M192 320h128" stroke="#fff" stroke-width="28" stroke-linecap="round"/>
+  <text x="256" y="420" text-anchor="middle" fill="#fff" font-family="Inter,sans-serif" font-size="48" font-weight="700">AFRIMED</text>
+</svg>
