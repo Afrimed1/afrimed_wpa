@@ -60,7 +60,7 @@ export function AdminDashboard() {
         <div className="card">
           <h2 className="font-semibold text-primary">Suivis en retard</h2>
           <p className="mt-4 text-sm text-primary/50">
-            Aucune alerte pour le moment — données de démonstration.
+            Aucune alerte pour le moment (données de démonstration).
           </p>
         </div>
       </div>

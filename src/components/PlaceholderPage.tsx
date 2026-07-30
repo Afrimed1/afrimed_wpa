@@ -21,7 +21,7 @@ export function PlaceholderPage({
         {description}
       </p>
       <span className="mt-4 inline-flex rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
-        Disponible — {phase}
+        Disponible en {phase}
       </span>
     </div>
   )

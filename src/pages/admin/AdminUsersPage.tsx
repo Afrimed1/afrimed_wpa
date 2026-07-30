@@ -359,8 +359,8 @@ function DemoUsersPreview() {
         <h2 className="font-semibold text-primary">Aperçu (mode démo)</h2>
       </div>
       <div className="space-y-3 px-5 py-4 text-sm text-primary-600">
-        <p>Dr. Ouédraogo — medecin@afrimed.bf — Médecin — Actif</p>
-        <p>Lab. Compaoré — labo@afrimed.bf — Laborantin — Actif</p>
+        <p>Dr. Ouédraogo medecin@afrimed.bf: Médecin Actif</p>
+        <p>Lab. Compaoré labo@afrimed.bf: Laborantin Actif</p>
       </div>
     </div>
   )

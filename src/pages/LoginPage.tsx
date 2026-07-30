@@ -114,7 +114,7 @@ export function LoginPage() {
         </div>
 
         <p className="text-sm text-white/50">
-          {isDemoMode ? 'Mode démo — Phase 0' : 'Authentification Supabase — Phase 1'}
+          {isDemoMode ? 'Mode démo: Phase 0' : 'Authentification Supabase: Phase 1'}
         </p>
       </div>
 
@@ -131,8 +131,7 @@ export function LoginPage() {
 
           {isDemoMode && (
             <div className="mt-4 rounded-xl border border-secondary-200 bg-secondary-50 px-4 py-3 text-sm text-secondary-800">
-              Mode démo actif — configurez Supabase dans <code>.env.local</code>{' '}
-              pour l&apos;auth réelle.
+              Mode démo actif
             </div>
           )}
 

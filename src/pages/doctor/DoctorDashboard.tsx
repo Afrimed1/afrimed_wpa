@@ -101,7 +101,7 @@ export function DoctorDashboard() {
       <div className="card">
         <h2 className="font-semibold text-primary">Consultations du jour</h2>
         <p className="mt-4 text-sm text-primary/50">
-          Aucune consultation programmée — les données seront disponibles en
+          Aucune consultation programmée, les données seront disponibles en
           Phase 2.
         </p>
       </div>
