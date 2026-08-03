@@ -1,15 +1,15 @@
 # AFRIMED - Suivi d'avancement
 
-Dernière mise à jour : 2026-08-03
-Références : AFRIMED_Proposition_MVP.pdf | CAHIER DES CHARGES.pdf
-Règle : source de vérité. Mettre à jour à chaque lot. Pas d'emoji. Optimiser les tokens.
+Derniere mise a jour : 2026-08-03
+References : AFRIMED_Proposition_MVP.pdf | CAHIER DES CHARGES.pdf
+Regle : source de verite. Mettre a jour a chaque lot. Pas d'emoji. Optimiser les tokens.
 
 ---
 
 ## Objectif MVP
 
 Flux consultation bout en bout sur 1 etablissement :
-Admin comptes → Medecin patient+code → Consultation → IA → Diagnostic → Labo → Ordonnance PDF → Suivi → Patient lit son dossier.
+Admin comptes -> Medecin patient+code -> Consultation -> IA -> Diagnostic -> Labo -> Ordonnance PDF -> Suivi -> Patient lit son dossier.
 
 Stack : React + Tailwind + PWA + Supabase + Gemini + Vercel.
 
@@ -17,23 +17,14 @@ Stack : React + Tailwind + PWA + Supabase + Gemini + Vercel.
 
 ## Etat global
 
-Statut : MVP EN LIGNE.
-URL production : https://afrimed-wpa.vercel.app
-Schema 003 OK. E2E OK. Deploy Vercel OK.
+Statut : MVP LIVRE ET EN LIGNE.
+URL : https://afrimed-wpa.vercel.app
+GitHub : https://github.com/Afrimed1/afrimed_wpa
+Schema 003 OK. E2E OK. Deploy Vercel OK. Push GitHub OK.
 
 ---
 
-## Hebergement
-
-Durable gratuit cible : Vercel (front + API serverless, 0 euro).
-Script : `scripts/deploy-vercel.mjs` / `npm run deploy`
-Une action humaine obligatoire : `npx vercel login` (compte gratuit).
-
-Tunnel temp (jury/dev) : Cloudflare Quick Tunnel tant que le PC tourne.
-
----
-
-## Fait (code)
+## Fait
 
 ### Phase 0-1
 - [x] PWA, auth, admin users API, bootstrap comptes
@@ -48,7 +39,7 @@ Tunnel temp (jury/dev) : Cloudflare Quick Tunnel tant que le PC tourne.
 - [x] Suggestions heuristiques + Gemini si GEMINI_API_KEY
 
 ### Phase 5 - Prescription
-- [x] Medicaments, alerte allergies + override, PDF jspdf
+- [x] Medicaments, alerte allergies + override, PDF
 
 ### Phase 6 - Laboratoire
 - [x] Demandes, saisie resultats, listes labo
@@ -59,14 +50,15 @@ Tunnel temp (jury/dev) : Cloudflare Quick Tunnel tant que le PC tourne.
 ### Phase 8 - Pilotage
 - [x] Dashboards medecin/admin + stats
 
-### Infra code
+### Infra
 - [x] API `/api/clinical/*` + `/api/admin/*`
-- [x] Migration 003 ecrite
+- [x] Migrations 001/002/003
 - [x] Comptes seed admin/medecin/labo
-- [x] Appliquer 003 en base live
-- [ ] Optionnel GEMINI_API_KEY
-- [ ] Optionnel DATABASE_URL pour auto-migrations
-- [ ] Deploy Vercel avec env
+- [x] Deploy Vercel + variables env
+- [x] Repo GitHub a jour
+- [x] IDENTIFIANTS_DEMO.txt ignore (local seul)
+- [ ] Optionnel : GEMINI_API_KEY
+- [ ] Optionnel : DATABASE_URL pour auto-migrations
 
 ---
 
@@ -76,7 +68,7 @@ Offline, infirmier, SMS/email, dashboard national, vaccination/imagerie complete
 
 ---
 
-## Identifiants
+## Identifiants (voir aussi IDENTIFIANTS_DEMO.txt local)
 
 - admin@afrimed.bf / demo1234
 - medecin@afrimed.bf / demo1234
@@ -85,21 +77,18 @@ Offline, infirmier, SMS/email, dashboard national, vaccination/imagerie complete
 
 ---
 
-## Action immediate
+## Prochaine action utile
 
-Tester le flux :
-1. `npm run dev` (redemarrer si deja lance)
-2. Login medecin@afrimed.bf
-3. Creer patient → consultation → demande labo → ordo
-4. Login labo → saisir resultat
-5. Patient code AF7K2M
+Tester sur https://afrimed-wpa.vercel.app le parcours medecin -> labo -> patient.
+Optionnel : ajouter GEMINI_API_KEY sur Vercel pour l'IA Gemini.
 
 ---
 
 ## Journal
 
 - 2026-08-03 : Phase 0-1 Supabase OK.
-- 2026-08-03 : MVP code Phases 2-8 livre. Build OK.
+- 2026-08-03 : MVP code Phases 2-8. Build OK.
 - 2026-08-03 : Schema 003 applique. 40 medicaments. Comptes verifies.
-- 2026-08-03 : E2E flux OK apres fix allergies create + blocage prescription (accents).
-- 2026-08-03 : Deploy Vercel https://afrimed-wpa.vercel.app + fix route patient-portal.
+- 2026-08-03 : E2E OK (fix allergies + blocage prescription).
+- 2026-08-03 : Deploy Vercel https://afrimed-wpa.vercel.app.
+- 2026-08-03 : Push GitHub. IDENTIFIANTS_DEMO.txt ignore. suivi aligne.
