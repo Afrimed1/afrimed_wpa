@@ -11,6 +11,7 @@ import { profileToAuthUser } from '@/lib/auth'
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase'
 import type { LoginResult, AuthUser, UserRole } from '@/types'
 import { DEMO_ACCOUNTS } from '@/types'
+import type { Profile } from '@/types/database'
 
 interface AuthContextValue {
   user: AuthUser | null
@@ -26,15 +27,13 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 const DEMO_STORAGE_KEY = 'afrimed_demo_user'
+const PATIENT_STORAGE_KEY = 'afrimed_patient_user'
 
 function findDemoStaffAccount(email: string, password: string) {
   const normalizedEmail = email.trim().toLowerCase()
 
   for (const [role, account] of Object.entries(DEMO_ACCOUNTS)) {
-    if (
-      account.email === normalizedEmail &&
-      account.password === password
-    ) {
+    if (account.email === normalizedEmail && account.password === password) {
       return {
         role: role as Exclude<UserRole, 'patient'>,
         name: account.name,
@@ -46,12 +45,23 @@ function findDemoStaffAccount(email: string, password: string) {
   return null
 }
 
+function readStoredUser(key: string): AuthUser | null {
+  const raw = sessionStorage.getItem(key)
+  if (!raw) return null
+  try {
+    return JSON.parse(raw) as AuthUser
+  } catch {
+    sessionStorage.removeItem(key)
+    return null
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const isDemoMode = !isSupabaseConfigured
 
-  const persistDemoUser = useCallback((next: AuthUser | null) => {
+  const setDemoUser = useCallback((next: AuthUser | null) => {
     setUser(next)
     if (next) {
       sessionStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(next))
@@ -60,23 +70,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const loadSupabaseProfile = useCallback(async (userId: string) => {
-    const { data, error } = await getSupabase()
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single()
+  const setPatientUser = useCallback((next: AuthUser | null) => {
+    setUser(next)
+    if (next) {
+      sessionStorage.setItem(PATIENT_STORAGE_KEY, JSON.stringify(next))
+    } else {
+      sessionStorage.removeItem(PATIENT_STORAGE_KEY)
+    }
+  }, [])
 
-    if (error || !data) {
-      throw new Error('Profil introuvable ou inactif.')
+  const loadSupabaseProfile = useCallback(async () => {
+    const { data, error } = await getSupabase().rpc('current_profile')
+    const profile = data as Profile | null
+
+    if (error || !profile) {
+      throw new Error(
+        error?.message
+          ? `Profil inaccessible : ${error.message}`
+          : 'Profil introuvable ou inactif.',
+      )
     }
 
-    if (!data.is_active) {
+    if (!profile.is_active) {
       await getSupabase().auth.signOut()
-      throw new Error('Ce compte a été désactivé.')
+      throw new Error('Ce compte a ete desactive.')
     }
 
-    return profileToAuthUser(data)
+    return profileToAuthUser(profile)
   }, [])
 
   const refreshUser = useCallback(async () => {
@@ -84,11 +104,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { data } = await getSupabase().auth.getSession()
     if (!data.session?.user) {
-      setUser(null)
+      const patient = readStoredUser(PATIENT_STORAGE_KEY)
+      setUser(patient)
       return
     }
 
-    const profile = await loadSupabaseProfile(data.session.user.id)
+    const profile = await loadSupabaseProfile()
     setUser(profile)
   }, [isDemoMode, loadSupabaseProfile])
 
@@ -97,10 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function bootstrap() {
       if (isDemoMode) {
-        const stored = sessionStorage.getItem(DEMO_STORAGE_KEY)
-        if (stored && mounted) {
-          setUser(JSON.parse(stored) as AuthUser)
-        }
+        if (mounted) setUser(readStoredUser(DEMO_STORAGE_KEY))
         if (mounted) setIsLoading(false)
         return
       }
@@ -109,18 +127,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (data.session?.user) {
         try {
-          const profile = await loadSupabaseProfile(data.session.user.id)
+          const profile = await loadSupabaseProfile()
           if (mounted) setUser(profile)
         } catch {
           await getSupabase().auth.signOut()
           if (mounted) setUser(null)
         }
+      } else if (mounted) {
+        setUser(readStoredUser(PATIENT_STORAGE_KEY))
       }
 
       if (mounted) setIsLoading(false)
     }
 
-    bootstrap()
+    void bootstrap()
 
     if (!isDemoMode) {
       const {
@@ -128,14 +148,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } = getSupabase().auth.onAuthStateChange(async (event, session) => {
         if (!mounted) return
 
-        if (event === 'SIGNED_OUT' || !session?.user) {
-          setUser(null)
+        if (event === 'SIGNED_OUT') {
+          setUser(readStoredUser(PATIENT_STORAGE_KEY))
           return
         }
 
+        if (!session?.user) return
+
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           try {
-            const profile = await loadSupabaseProfile(session.user.id)
+            const profile = await loadSupabaseProfile()
+            sessionStorage.removeItem(PATIENT_STORAGE_KEY)
             setUser(profile)
           } catch {
             setUser(null)
@@ -161,11 +184,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!account) {
           return {
             success: false,
-            error: 'Identifiants incorrects. Utilisez un compte de démonstration.',
+            error: 'Identifiants incorrects. Utilisez un compte de demonstration.',
           }
         }
 
-        persistDemoUser({
+        setDemoUser({
           role: account.role,
           email: account.email,
           name: account.name,
@@ -182,12 +205,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error || !data.user) {
         return {
           success: false,
-          error: 'Email ou mot de passe incorrect.',
+          error: error?.message
+            ? `Connexion refusee : ${error.message}`
+            : 'Email ou mot de passe incorrect.',
         }
       }
 
       try {
-        const profile = await loadSupabaseProfile(data.user.id)
+        sessionStorage.removeItem(PATIENT_STORAGE_KEY)
+        const profile = await loadSupabaseProfile()
         setUser(profile)
         return { success: true, role: profile.role }
       } catch (profileError) {
@@ -201,18 +227,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [isDemoMode, loadSupabaseProfile, persistDemoUser],
+    [isDemoMode, loadSupabaseProfile, setDemoUser],
   )
 
   const loginPatient = useCallback(
     async (code: string): Promise<LoginResult> => {
       const normalized = code.trim().toUpperCase()
       if (normalized.length < 4) {
-        return { success: false, error: 'Code invalide. Minimum 4 caractères.' }
+        return { success: false, error: 'Code invalide. Minimum 4 caracteres.' }
       }
 
       if (isDemoMode) {
-        persistDemoUser({
+        setDemoUser({
           role: 'patient',
           name: 'Patient',
           patientCode: normalized,
@@ -230,11 +256,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error || !data) {
         return {
           success: false,
-          error: 'Code patient inconnu. Vérifiez auprès de votre médecin.',
+          error: 'Code patient inconnu. Verifiez aupres de votre medecin.',
         }
       }
 
-      persistDemoUser({
+      await getSupabase().auth.signOut()
+      setPatientUser({
         role: 'patient',
         name: `${data.first_name} ${data.last_name}`,
         firstName: data.first_name,
@@ -246,19 +273,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       return { success: true, role: 'patient' }
     },
-    [isDemoMode, persistDemoUser],
+    [isDemoMode, setDemoUser, setPatientUser],
   )
 
   const logout = useCallback(async () => {
     if (isDemoMode) {
-      persistDemoUser(null)
+      setDemoUser(null)
       return
     }
 
+    sessionStorage.removeItem(PATIENT_STORAGE_KEY)
     await getSupabase().auth.signOut()
     setUser(null)
-    sessionStorage.removeItem(DEMO_STORAGE_KEY)
-  }, [isDemoMode, persistDemoUser])
+  }, [isDemoMode, setDemoUser])
 
   const value = useMemo(
     () => ({

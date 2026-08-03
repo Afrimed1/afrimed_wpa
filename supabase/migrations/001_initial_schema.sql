@@ -1,4 +1,4 @@
--- AFRIMED — Schéma initial (Phase 1)
+-- AFRIMED - Schéma initial (Phase 1)
 -- Exécuter dans Supabase : SQL Editor → New query → Run
 
 -- Établissement pilote
@@ -21,7 +21,7 @@ create table if not exists public.profiles (
   updated_at timestamptz not null default now()
 );
 
--- Patients (accès par code — enrichi en Phase 2)
+-- Patients (accès par code - enrichi en Phase 2)
 create table if not exists public.patients (
   id uuid primary key default gen_random_uuid(),
   establishment_id uuid not null references public.establishments(id),
@@ -65,6 +65,9 @@ as $$
   select * from public.profiles where id = auth.uid();
 $$;
 
+revoke all on function public.current_profile() from public;
+grant execute on function public.current_profile() to authenticated;
+
 -- Établissements : lecture pour les membres
 create policy "establishments_select_member"
   on public.establishments for select
@@ -79,56 +82,40 @@ create policy "profiles_select_own"
   to authenticated
   using (id = auth.uid());
 
--- Profils : admin lit tous les profils de son établissement
+-- Profils : admin lit tous les profils de son etablissement (via current_profile, pas de recursion)
 create policy "profiles_select_admin_establishment"
   on public.profiles for select
   to authenticated
   using (
-    exists (
-      select 1 from public.profiles admin
-      where admin.id = auth.uid()
-        and admin.role = 'admin'
-        and admin.is_active = true
-        and admin.establishment_id = profiles.establishment_id
-    )
+    coalesce((public.current_profile()).role, '') = 'admin'
+    and coalesce((public.current_profile()).is_active, false) = true
+    and establishment_id = (public.current_profile()).establishment_id
   );
 
--- Profils : admin crée des comptes staff
+-- Profils : admin cree des comptes staff
 create policy "profiles_insert_admin"
   on public.profiles for insert
   to authenticated
   with check (
-    exists (
-      select 1 from public.profiles admin
-      where admin.id = auth.uid()
-        and admin.role = 'admin'
-        and admin.is_active = true
-        and admin.establishment_id = establishment_id
-    )
+    coalesce((public.current_profile()).role, '') = 'admin'
+    and coalesce((public.current_profile()).is_active, false) = true
+    and establishment_id = (public.current_profile()).establishment_id
     and role in ('doctor', 'lab')
   );
 
--- Profils : admin met à jour is_active dans son établissement
+-- Profils : admin met a jour is_active dans son etablissement
 create policy "profiles_update_admin"
   on public.profiles for update
   to authenticated
   using (
-    exists (
-      select 1 from public.profiles admin
-      where admin.id = auth.uid()
-        and admin.role = 'admin'
-        and admin.is_active = true
-        and admin.establishment_id = profiles.establishment_id
-    )
+    coalesce((public.current_profile()).role, '') = 'admin'
+    and coalesce((public.current_profile()).is_active, false) = true
+    and establishment_id = (public.current_profile()).establishment_id
   )
   with check (
-    exists (
-      select 1 from public.profiles admin
-      where admin.id = auth.uid()
-        and admin.role = 'admin'
-        and admin.is_active = true
-        and admin.establishment_id = profiles.establishment_id
-    )
+    coalesce((public.current_profile()).role, '') = 'admin'
+    and coalesce((public.current_profile()).is_active, false) = true
+    and establishment_id = (public.current_profile()).establishment_id
   );
 
 -- Patients : accès public en lecture par code (anon) pour espace patient

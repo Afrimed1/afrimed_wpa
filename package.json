@@ -7,10 +7,14 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "fix:supabase": "node --env-file=.env.local scripts/fix-supabase.mjs",
+    "e2e": "node --env-file=.env.local scripts/e2e-flow.mjs",
+    "deploy": "node --env-file=.env.local scripts/deploy-vercel.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.111.0",
+    "jspdf": "^4.2.1",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

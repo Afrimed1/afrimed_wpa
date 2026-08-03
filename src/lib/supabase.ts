@@ -1,17 +1,25 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+function normalizeSupabaseUrl(raw: string | undefined): string {
+  return String(raw || '')
+    .trim()
+    .replace(/\/rest\/v1\/?$/i, '')
+    .replace(/\/$/, '')
+}
 
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey)
+const supabaseUrl = normalizeSupabaseUrl(import.meta.env.VITE_SUPABASE_URL)
+const supabaseKey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  import.meta.env.VITE_SUPABASE_ANON_KEY) as string | undefined
+
+export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseKey)
 
 function createSupabaseClient(persistSession: boolean): SupabaseClient<Database> {
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Supabase non configuré')
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Supabase non configure')
   }
 
-  return createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  return createClient<Database>(supabaseUrl, supabaseKey, {
     auth: {
       persistSession,
       autoRefreshToken: persistSession,
@@ -21,11 +29,10 @@ function createSupabaseClient(persistSession: boolean): SupabaseClient<Database>
 }
 
 let mainClient: SupabaseClient<Database> | null = null
-let helperClient: SupabaseClient<Database> | null = null
 
 export function getSupabase(): SupabaseClient<Database> {
   if (!isSupabaseConfigured) {
-    throw new Error('Supabase non configuré')
+    throw new Error('Supabase non configure')
   }
   if (!mainClient) {
     mainClient = createSupabaseClient(true)
@@ -33,22 +40,8 @@ export function getSupabase(): SupabaseClient<Database> {
   return mainClient
 }
 
-export function getSupabaseAuthHelper(): SupabaseClient<Database> {
-  if (!isSupabaseConfigured) {
-    throw new Error('Supabase non configuré')
-  }
-  if (!helperClient) {
-    helperClient = createSupabaseClient(false)
-  }
-  return helperClient
+export async function getAccessToken(): Promise<string | null> {
+  if (!isSupabaseConfigured) return null
+  const { data } = await getSupabase().auth.getSession()
+  return data.session?.access_token ?? null
 }
-
-/** @deprecated Utiliser getSupabase() */
-export const supabase = isSupabaseConfigured
-  ? (null as unknown as SupabaseClient<Database>)
-  : (null as unknown as SupabaseClient<Database>)
-
-/** @deprecated Utiliser getSupabaseAuthHelper() */
-export const supabaseAuthHelper = isSupabaseConfigured
-  ? (null as unknown as SupabaseClient<Database>)
-  : (null as unknown as SupabaseClient<Database>)

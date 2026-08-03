@@ -310,7 +310,7 @@ export function AdminUsersPage() {
                           )}
                         </button>
                       ) : (
-                        <span className="text-xs text-primary-400">—</span>
+                        <span className="text-xs text-primary-400">-</span>
                       )}
                     </td>
                   </tr>

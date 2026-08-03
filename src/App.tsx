@@ -7,7 +7,9 @@ import { AdminDashboard } from '@/pages/admin/AdminDashboard'
 import { AdminStatsPage } from '@/pages/admin/AdminStatsPage'
 import { AdminUsersPage } from '@/pages/admin/AdminUsersPage'
 import { DoctorConsultationsPage } from '@/pages/doctor/DoctorConsultationsPage'
+import { DoctorConsultationPage } from '@/pages/doctor/DoctorConsultationPage'
 import { DoctorDashboard } from '@/pages/doctor/DoctorDashboard'
+import { DoctorPatientDetailPage } from '@/pages/doctor/DoctorPatientDetailPage'
 import { DoctorPatientsPage } from '@/pages/doctor/DoctorPatientsPage'
 import { LabDashboard } from '@/pages/lab/LabDashboard'
 import { LabRequestsPage } from '@/pages/lab/LabRequestsPage'
@@ -35,9 +37,14 @@ export default function App() {
       <Route element={<ProtectedRoute allowedRoles={['doctor']} />}>
         <Route path="/doctor" element={<DoctorDashboard />} />
         <Route path="/doctor/patients" element={<DoctorPatientsPage />} />
+        <Route path="/doctor/patients/:id" element={<DoctorPatientDetailPage />} />
         <Route
           path="/doctor/consultations"
           element={<DoctorConsultationsPage />}
+        />
+        <Route
+          path="/doctor/consultations/:id"
+          element={<DoctorConsultationPage />}
         />
       </Route>
 

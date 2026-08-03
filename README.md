@@ -1,66 +1,58 @@
-# AFRIMED — Application médicale (MVP)
+# AFRIMED
 
-Progressive Web App pour la consultation médicale structurée au Burkina Faso.
+Application medicale PWA (consultation structuree).
 
 ## Stack
 
-- **React 18** + **TypeScript** + **Vite**
-- **Tailwind CSS** — charte bleu nuit / teal / terracotta
-- **Supabase** — auth, base de données (Phase 1)
-- **PWA** — installable sur tablette
+- React 18 + TypeScript + Vite
+- Tailwind CSS
+- Supabase
+- PWA installable
+- Hebergement: Vercel
 
-## Démarrage rapide (mode démo)
+## URL
+
+https://afrimed-wpa.vercel.app
+
+## Demarrage local
 
 ```bash
 npm install
 npm run dev
 ```
 
-Sans fichier `.env.local`, l'app fonctionne en **mode démo** avec les comptes ci-dessous.
+Sans `.env.local`, mode demo.
 
-## Comptes démo (sans Supabase)
+## Comptes
 
 | Profil | Email | Mot de passe |
 |--------|-------|--------------|
 | Admin | admin@afrimed.bf | demo1234 |
-| Médecin | medecin@afrimed.bf | demo1234 |
+| Medecin | medecin@afrimed.bf | demo1234 |
 | Laborantin | labo@afrimed.bf | demo1234 |
 
-**Patient** : code `AF7K2M` (ou tout code 4+ caractères en mode démo)
+Patient: code `AF7K2M`
 
-## Configuration Supabase (Phase 1)
+## Configuration Supabase
 
-1. Créer un projet sur [supabase.com](https://supabase.com)
-2. Copier `.env.example` → `.env.local` et renseigner les clés
-3. Exécuter `supabase/migrations/001_initial_schema.sql` dans le SQL Editor
-4. Dans **Authentication → Users**, créer l'admin `admin@afrimed.bf`
-5. Lier le profil admin (voir commentaire en fin de migration SQL)
-6. Désactiver la confirmation email : **Authentication → Providers → Email**
-
-## Phases livrées
-
-### Phase 0
-- Splash, login, navigation multi-profils, PWA
-
-### Phase 1
-- Auth Supabase (staff) avec session persistée
-- Accès patient par code (table `patients`)
-- Admin : liste utilisateurs, création médecin/labo, activation/désactivation
-- Fallback mode démo si Supabase non configuré
-
-### Phase 2 (à venir)
-- Dossier patient complet
+1. Copier `.env.example` vers `.env.local`
+2. Renseigner `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`
+3. Executer les migrations SQL (`001`, puis `002` si besoin, puis `003`)
+4. Activer le provider Email (sans confirmation)
+5. `npm run fix:supabase`
 
 ## Scripts
 
 ```bash
-npm run dev      # développement
-npm run build    # build production
-npm run preview  # prévisualiser le build
+npm run dev
+npm run build
+npm run fix:supabase
+npm run e2e
+npm run deploy
 ```
 
-## Documents projet
+## Docs
 
-- `AFRIMED_Proposition_MVP.pdf` — périmètre fonctionnel
-- `CAHIER DES CHARGES.pdf` — spécifications complètes
-- `formulaire_medicaments_essentiels.xlsx` — base médicaments
+- `suivi.md`
+- `AFRIMED_Proposition_MVP.pdf`
+- `CAHIER DES CHARGES.pdf`

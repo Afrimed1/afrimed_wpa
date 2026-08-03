@@ -1,8 +1,32 @@
+import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
-import { AlertTriangle, Calendar, FileText, Heart } from 'lucide-react'
+import { AlertTriangle, Calendar, FileText, Heart, Loader2 } from 'lucide-react'
+import { patientPortal, type PatientPortalData } from '@/services/clinical'
 
 export function PatientDashboard() {
-  const { user } = useAuth()
+  const { user, isDemoMode } = useAuth()
+  const [portal, setPortal] = useState<PatientPortalData | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const loadPortal = useCallback(async () => {
+    if (isDemoMode || !user?.patientCode) {
+      setIsLoading(false)
+      return
+    }
+    try {
+      setError('')
+      setPortal(await patientPortal(user.patientCode))
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Impossible de charger votre dossier.')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [isDemoMode, user?.patientCode])
+
+  useEffect(() => {
+    void loadPortal()
+  }, [loadPortal])
 
   return (
     <div className="space-y-6">
@@ -12,6 +36,9 @@ export function PatientDashboard() {
           Consultation en lecture seule de vos informations médicales
         </p>
       </div>
+
+      {isDemoMode && <div className="card border-secondary-200 bg-secondary-50 text-sm text-primary-700">Supabase est requis pour consulter votre dossier médical réel.</div>}
+      {error && <div className="rounded-xl border border-accent-200 bg-accent-50 px-4 py-3 text-sm text-accent">{error}</div>}
 
       {user?.patientCode && (
         <div className="rounded-2xl border border-secondary/20 bg-secondary/5 px-4 py-3">
@@ -32,9 +59,14 @@ export function PatientDashboard() {
             </div>
             <div>
               <p className="text-sm text-primary/60">Allergies déclarées</p>
-              <p className="font-semibold text-primary">—</p>
+              <p className="font-semibold text-primary">{isLoading ? 'Chargement…' : portal?.allergies.length ?? 0}</p>
             </div>
           </div>
+          {!isLoading && portal?.allergies.length ? (
+            <p className="mt-3 text-sm text-primary/70">
+              {portal.allergies.map((allergy) => allergy.substance).join(', ')}
+            </p>
+          ) : null}
         </div>
         <div className="card">
           <div className="flex items-center gap-3">
@@ -43,7 +75,7 @@ export function PatientDashboard() {
             </div>
             <div>
               <p className="text-sm text-primary/60">Traitements en cours</p>
-              <p className="font-semibold text-primary">—</p>
+              <p className="font-semibold text-primary">{isLoading ? 'Chargement…' : portal?.chronic.treatments || 'Aucun traitement renseigné'}</p>
             </div>
           </div>
         </div>
@@ -54,9 +86,18 @@ export function PatientDashboard() {
           <FileText className="h-5 w-5 text-primary/50" />
           <h2 className="font-semibold text-primary">Dernières consultations</h2>
         </div>
-        <p className="text-sm text-primary/50">
-          Vos consultations passées apparaîtront ici en Phase 7.
-        </p>
+        {isLoading ? (
+          <div className="flex justify-center py-6"><Loader2 className="h-6 w-6 animate-spin text-secondary" /></div>
+        ) : portal?.pastConsultations.length ? (
+          <div className="divide-y divide-primary-100">
+            {portal.pastConsultations.slice(0, 5).map((consultation) => (
+              <div key={`${consultation.date}-${consultation.motif}`} className="py-3 text-sm">
+                <p className="font-medium text-primary">{consultation.motif || 'Consultation'}</p>
+                <p className="mt-1 text-primary/60">{formatDate(consultation.date)} · {consultation.diagnosis || 'Diagnostic non renseigné'}</p>
+              </div>
+            ))}
+          </div>
+        ) : <p className="text-sm text-primary/50">Aucune consultation récente.</p>}
       </div>
 
       <div className="card border-secondary/20 bg-secondary/5">
@@ -64,10 +105,22 @@ export function PatientDashboard() {
           <Calendar className="h-5 w-5 text-secondary" />
           <div>
             <p className="font-semibold text-primary">Prochain rendez-vous</p>
-            <p className="text-sm text-primary/60">Non programmé</p>
+            <p className="text-sm text-primary/60">{nextFollowUp(portal) ? formatDate(nextFollowUp(portal)!) : 'Non programmé'}</p>
           </div>
         </div>
       </div>
     </div>
   )
+}
+
+function nextFollowUp(portal: PatientPortalData | null) {
+  return portal?.followUp
+    .map((followUp) => followUp.date)
+    .filter((date): date is string => Boolean(date))
+    .filter((date) => new Date(date) >= new Date())
+    .sort()[0]
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' }).format(new Date(value))
 }

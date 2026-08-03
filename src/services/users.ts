@@ -1,9 +1,4 @@
-import { generateTemporaryPassword } from '@/lib/auth'
-import {
-  getSupabase,
-  getSupabaseAuthHelper,
-  isSupabaseConfigured,
-} from '@/lib/supabase'
+import { getAccessToken, isSupabaseConfigured } from '@/lib/supabase'
 import type { Profile, StaffRole } from '@/types/database'
 
 export interface CreateStaffInput {
@@ -20,77 +15,69 @@ export interface CreateStaffResult {
   error?: string
 }
 
+async function adminFetch(path: string, init: RequestInit = {}) {
+  const token = await getAccessToken()
+  if (!token) {
+    throw new Error('Session expiree. Reconnectez-vous.')
+  }
+
+  const response = await fetch(path, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...(init.headers || {}),
+    },
+  })
+
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(payload.error || `Erreur API (${response.status})`)
+  }
+  return payload
+}
+
 export async function fetchEstablishmentProfiles(
   establishmentId: string,
 ): Promise<Profile[]> {
-  const { data, error } = await getSupabase()
-    .from('profiles')
-    .select('*')
-    .eq('establishment_id', establishmentId)
-    .order('created_at', { ascending: false })
+  if (!isSupabaseConfigured) return []
 
-  if (error) throw error
-  return data ?? []
+  const payload = await adminFetch(
+    `/api/admin/profiles?establishmentId=${encodeURIComponent(establishmentId)}`,
+  )
+  return (payload.data as Profile[]) ?? []
 }
 
 export async function createStaffAccount(
   input: CreateStaffInput,
 ): Promise<CreateStaffResult> {
   if (!isSupabaseConfigured) {
-    return { success: false, error: 'Supabase non configuré.' }
+    return { success: false, error: 'Supabase non configure.' }
   }
 
-  const email = input.email.trim().toLowerCase()
-  const temporaryPassword = generateTemporaryPassword()
-
-  const { data: signUpData, error: signUpError } =
-    await getSupabaseAuthHelper().auth.signUp({
-      email,
-      password: temporaryPassword,
-      options: {
-        data: {
-          first_name: input.firstName,
-          last_name: input.lastName,
-          role: input.role,
-        },
-      },
+  try {
+    const payload = await adminFetch('/api/admin/staff', {
+      method: 'POST',
+      body: JSON.stringify(input),
     })
-
-  if (signUpError || !signUpData.user) {
+    return {
+      success: true,
+      temporaryPassword: payload.temporaryPassword as string,
+    }
+  } catch (error) {
     return {
       success: false,
-      error: signUpError?.message ?? 'Impossible de créer le compte.',
+      error: error instanceof Error ? error.message : 'Creation impossible.',
     }
   }
-
-  const { error: profileError } = await getSupabase().from('profiles').insert({
-    id: signUpData.user.id,
-    establishment_id: input.establishmentId,
-    role: input.role,
-    first_name: input.firstName.trim(),
-    last_name: input.lastName.trim(),
-    email,
-    is_active: true,
-  })
-
-  if (profileError) {
-    return {
-      success: false,
-      error: profileError.message,
-    }
-  }
-
-  return { success: true, temporaryPassword }
 }
 
 export async function setProfileActive(
   profileId: string,
   isActive: boolean,
 ): Promise<void> {
-  const { error } = await getSupabase()
-    .from('profiles')
-    .update({ is_active: isActive })
-    .eq('id', profileId)
-
-  if (error) throw error
+  await adminFetch(`/api/admin/staff/${encodeURIComponent(profileId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ isActive }),
+  })
 }
