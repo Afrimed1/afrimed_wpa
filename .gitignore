@@ -11,6 +11,7 @@ dev-dist/
 !.env.example
 *.pem
 *.key
+IDENTIFIANTS_DEMO.txt
 
 # Local / outils
 .vercel/
