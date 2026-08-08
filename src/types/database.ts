@@ -78,6 +78,7 @@ export interface Database {
           emergency_contact_name: string | null
           emergency_contact_phone: string | null
           personal_history: string
+          medical_history: string
           family_history: string
           chronic_treatments: string
           is_active: boolean
@@ -96,6 +97,7 @@ export interface Database {
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           personal_history?: string
+          medical_history?: string
           family_history?: string
           chronic_treatments?: string
           is_active?: boolean
@@ -114,6 +116,7 @@ export interface Database {
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           personal_history?: string
+          medical_history?: string
           family_history?: string
           chronic_treatments?: string
           is_active?: boolean

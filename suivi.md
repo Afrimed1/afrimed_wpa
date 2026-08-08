@@ -1,6 +1,6 @@
 # AFRIMED - Suivi d'avancement
 
-Derniere mise a jour : 2026-08-03
+Derniere mise a jour : 2026-08-08
 References : AFRIMED_Proposition_MVP.pdf | CAHIER DES CHARGES.pdf
 Regle : source de verite. Mettre a jour a chaque lot. Pas d'emoji. Optimiser les tokens.
 
@@ -17,10 +17,10 @@ Stack : React + Tailwind + PWA + Supabase + Gemini + Vercel.
 
 ## Etat global
 
-Statut : MVP LIVRE ET EN LIGNE.
+Statut : MVP LIVRE ET STABLE EN PROD.
 URL : https://afrimed-wpa.vercel.app
 GitHub : https://github.com/Afrimed1/afrimed_wpa
-Schema 003 OK. E2E OK. Deploy Vercel OK. Push GitHub OK.
+Schema 001-004 OK (medical_history applique). E2E 19/19. Smoke HTTP prod OK (dossier/consultation/labo/portail).
 
 ---
 
@@ -31,6 +31,11 @@ Schema 003 OK. E2E OK. Deploy Vercel OK. Push GitHub OK.
 
 ### Phase 2 - Dossier patient
 - [x] Recherche / creation / code unique / antecedents / allergies / traitements / detail dossier
+- [x] Age revolu (calcule/remplit date naissance)
+- [x] Motif + histoire maladie avant antecedents (cree consultation initiale)
+- [x] Antecedents personnels / medicaux / familiaux / traitements
+- [x] Fix creation dossier (null dates, allergies en 1 requete, sanitize payload)
+- [x] Colonne medical_history (migration 004)
 
 ### Phase 3 - Consultation guidee
 - [x] Motif, histoire, constantes, revue systemes, examen, cloture diagnostic/report, suivi
@@ -52,7 +57,8 @@ Schema 003 OK. E2E OK. Deploy Vercel OK. Push GitHub OK.
 
 ### Infra
 - [x] API `/api/clinical/*` + `/api/admin/*`
-- [x] Migrations 001/002/003
+- [x] Fix Vercel routes imbriquees (404 patients/:id) via rewrite + handlers explicites
+- [x] Migrations 001/002/003/004
 - [x] Comptes seed admin/medecin/labo
 - [x] Deploy Vercel + variables env
 - [x] Repo GitHub a jour
@@ -79,13 +85,18 @@ Offline, infirmier, SMS/email, dashboard national, vaccination/imagerie complete
 
 ## Prochaine action utile
 
-Tester sur https://afrimed-wpa.vercel.app le parcours medecin -> labo -> patient.
-Optionnel : ajouter GEMINI_API_KEY sur Vercel pour l'IA Gemini.
+1. Optionnel : GEMINI_API_KEY sur Vercel pour IA Gemini reelle
+2. Optionnel : DATABASE_URL pour auto-apply des migrations suivantes
+3. Recueillir prochains retours client / jury
 
 ---
 
 ## Journal
 
+- 2026-08-08 : Suivi aligne. Migration 004 appliquee. Fix 404 Vercel. Smoke prod OK. Push + deploy.
+- 2026-08-08 : Fix 404 dossier patient sur Vercel (routes API imbriquees + rewrite clinical-handler).
+- 2026-08-07 : Audit + correctifs dossier (age, motif/histoire, personnels/medicaux, sanitize create, E2E 19/19, deploy).
+- 2026-08-07 : Retours client dossier : age revolu, motif/histoire avant antecedents, personnels vs medicaux, fix erreur creation.
 - 2026-08-03 : Phase 0-1 Supabase OK.
 - 2026-08-03 : MVP code Phases 2-8. Build OK.
 - 2026-08-03 : Schema 003 applique. 40 medicaments. Comptes verifies.

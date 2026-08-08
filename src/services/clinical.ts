@@ -18,7 +18,11 @@ type TableUpdate<Table extends keyof import('@/types/database').Database['public
 export type PatientInput = Omit<
   TableInsert<'patients'>,
   'id' | 'establishment_id' | 'access_code' | 'created_at' | 'updated_at'
->
+> & {
+  allergies?: Array<Pick<PatientAllergy, 'substance' | 'severity' | 'notes'>>
+  motif?: string
+  history_of_illness?: string
+}
 export type PatientUpdateInput = Omit<
   TableUpdate<'patients'>,
   'id' | 'establishment_id' | 'access_code' | 'created_at' | 'updated_at'
@@ -131,6 +135,7 @@ export interface PatientPortalData {
   allergies: Array<Pick<PatientAllergy, 'substance' | 'severity' | 'notes'>>
   chronic: {
     personalHistory: string
+    medicalHistory: string
     familyHistory: string
     treatments: string
   }
@@ -186,7 +191,10 @@ export function searchPatients(options: SearchPatientsOptions = {}): Promise<Pat
   )
 }
 
-export function createPatient(input: PatientInput): Promise<Patient> {
+export function createPatient(input: PatientInput): Promise<PatientDossier & {
+  initialConsultation?: Consultation | null
+  warning?: string | null
+}> {
   return clinicalFetch('/api/clinical/patients', {
     method: 'POST',
     body: JSON.stringify(input),

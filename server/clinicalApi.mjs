@@ -10,10 +10,21 @@ const PATIENT_FIELDS = [
   'emergency_contact_name',
   'emergency_contact_phone',
   'personal_history',
+  'medical_history',
   'family_history',
   'chronic_treatments',
   'is_active',
 ]
+
+const PATIENT_NULLABLE_TEXT = [
+  'birth_date',
+  'phone',
+  'emergency_contact_name',
+  'emergency_contact_phone',
+]
+const MEDICAL_HISTORY_MARKER = '\n\n---ANTECEDENTS_MEDICAUX---\n'
+let medicalHistoryColumnSupported = null
+
 const CONSULTATION_FIELDS = [
   'motif',
   'history_of_illness',
@@ -81,9 +92,9 @@ async function getPatient(admin, patientId, establishmentId) {
     .eq('id', patientId)
     .eq('establishment_id', establishmentId)
     .maybeSingle()
-  if (error) throw error
+  if (error) throw httpError(error.message || 'Lecture patient impossible', 500)
   if (!data) throw httpError('Patient introuvable', 404)
-  return data
+  return presentPatient(data)
 }
 
 async function getConsultationRecord(admin, id, establishmentId) {
@@ -121,7 +132,88 @@ export async function searchPatients(accessToken, { q = '', establishmentId } = 
   }
   const { data, error } = await query
   if (error) throw error
-  return data ?? []
+  return (data ?? []).map(presentPatient)
+}
+
+function normalizePatientPayload(payload) {
+  const picked = pick(payload, PATIENT_FIELDS)
+  for (const key of PATIENT_NULLABLE_TEXT) {
+    if (picked[key] !== undefined) {
+      picked[key] = text(picked[key]) || null
+    }
+  }
+  if (picked.sex !== undefined) {
+    const sex = text(picked.sex)
+    picked.sex = ['M', 'F', 'U'].includes(sex) ? sex : 'U'
+  }
+  for (const key of ['personal_history', 'medical_history', 'family_history', 'chronic_treatments']) {
+    if (picked[key] !== undefined) picked[key] = text(picked[key])
+  }
+  return picked
+}
+
+async function supportsMedicalHistoryColumn(admin) {
+  if (medicalHistoryColumnSupported !== null) return medicalHistoryColumnSupported
+  const { error } = await admin.from('patients').select('medical_history').limit(1)
+  if (!error) {
+    medicalHistoryColumnSupported = true
+    return true
+  }
+  const message = String(error.message || '')
+  if (message.includes('medical_history') || error.code === '42703' || error.code === 'PGRST204') {
+    medicalHistoryColumnSupported = false
+    return false
+  }
+  // Erreur transitoire (auth/reseau) : ne pas cacher un faux negatif
+  throw httpError(message || 'Verification schema patient impossible', 503)
+}
+
+function packPatientHistories(patient, hasMedicalColumn) {
+  if (hasMedicalColumn) return patient
+  const next = { ...patient }
+  delete next.medical_history
+  if (patient.medical_history === undefined) return next
+  const personal = text(patient.personal_history)
+  const medical = text(patient.medical_history)
+  next.personal_history = medical ? `${personal}${MEDICAL_HISTORY_MARKER}${medical}` : personal
+  return next
+}
+
+function presentPatient(patient) {
+  if (!patient) return patient
+  const raw = patient.personal_history || ''
+  const index = raw.indexOf(MEDICAL_HISTORY_MARKER)
+  const columnMedical = typeof patient.medical_history === 'string' ? patient.medical_history : ''
+  if (index === -1) {
+    return { ...patient, medical_history: columnMedical }
+  }
+  return {
+    ...patient,
+    personal_history: raw.slice(0, index),
+    medical_history: columnMedical || raw.slice(index + MEDICAL_HISTORY_MARKER.length),
+  }
+}
+
+function patientWriteError(error, fallback) {
+  const message = error?.message || fallback
+  if (String(message).includes('medical_history')) {
+    return httpError(
+      'Colonne medical_history absente. Executez supabase/migrations/004_medical_history.sql dans le SQL Editor Supabase.',
+    )
+  }
+  return httpError(message || fallback)
+}
+
+function normalizeAllergies(patientId, allergies) {
+  if (!Array.isArray(allergies)) return []
+  return allergies
+    .map((allergy) => ({
+      patient_id: patientId,
+      substance: text(allergy.substance),
+      severity: text(allergy.severity),
+      notes: text(allergy.notes) || null,
+    }))
+    .filter((allergy) => allergy.substance && ['mild', 'moderate', 'severe'].includes(allergy.severity))
 }
 
 export async function createPatient(accessToken, payload, env) {
@@ -130,12 +222,20 @@ export async function createPatient(accessToken, payload, env) {
   const lastName = text(payload.lastName ?? payload.last_name)
   if (!firstName || !lastName) throw httpError('Nom et prenom obligatoires')
 
-  const patient = {
-    ...pick(payload, PATIENT_FIELDS),
-    first_name: firstName,
-    last_name: lastName,
-    establishment_id: profile.establishment_id,
-  }
+  const hasMedicalColumn = await supportsMedicalHistoryColumn(admin)
+  const patient = packPatientHistories(
+    {
+      ...normalizePatientPayload(payload),
+      first_name: firstName,
+      last_name: lastName,
+      establishment_id: profile.establishment_id,
+      is_active: true,
+    },
+    hasMedicalColumn,
+  )
+  delete patient.id
+  delete patient.access_code
+
   let created = null
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const { data, error } = await admin
@@ -144,30 +244,45 @@ export async function createPatient(accessToken, payload, env) {
       .select('*')
       .single()
     if (!error) {
-      created = data
+      created = presentPatient(data)
       break
     }
-    if (error.code !== '23505') throw error
+    if (error.code !== '23505') throw patientWriteError(error, 'Creation patient impossible')
   }
   if (!created) throw httpError('Impossible de generer un code patient unique', 500)
 
-  const allergies = Array.isArray(payload.allergies)
-    ? payload.allergies
-        .map((allergy) => ({
-          patient_id: created.id,
-          substance: text(allergy.substance),
-          severity: text(allergy.severity),
-          notes: text(allergy.notes) || null,
-        }))
-        .filter((allergy) => allergy.substance && ['mild', 'moderate', 'severe'].includes(allergy.severity))
-    : []
-
+  const allergies = normalizeAllergies(created.id, payload.allergies)
   if (allergies.length) {
     const { error } = await admin.from('patient_allergies').insert(allergies)
-    if (error) throw error
+    if (error) throw httpError(error.message || 'Allergies non enregistrees')
   }
 
-  return getPatientDossier(accessToken, created.id, env)
+  const motif = text(payload.motif)
+  const historyOfIllness = String(payload.history_of_illness ?? payload.historyOfIllness ?? '').replace(/^\uFEFF/, '')
+  let consultation = null
+  let warning = null
+  if (motif || historyOfIllness.trim()) {
+    const createdConsultation = await admin
+      .from('consultations')
+      .insert({
+        establishment_id: profile.establishment_id,
+        patient_id: created.id,
+        doctor_id: profile.id,
+        status: 'in_progress',
+        motif: motif || null,
+        history_of_illness: historyOfIllness.trim() ? historyOfIllness : null,
+      })
+      .select('*')
+      .single()
+    if (createdConsultation.error) {
+      warning = createdConsultation.error.message || 'Consultation initiale non creee'
+    } else {
+      consultation = createdConsultation.data
+    }
+  }
+
+  const dossier = await getPatientDossier(accessToken, created.id, env)
+  return { ...dossier, initialConsultation: consultation, warning }
 }
 
 export async function getPatientDossier(accessToken, patientId, env) {
@@ -183,35 +298,38 @@ export async function getPatientDossier(accessToken, patientId, env) {
       .order('started_at', { ascending: false })
       .limit(20),
   ])
-  if (allergiesResult.error) throw allergiesResult.error
-  if (consultationsResult.error) throw consultationsResult.error
-  return { ...patient, allergies: allergiesResult.data ?? [], recentConsultations: consultationsResult.data ?? [] }
+  if (allergiesResult.error) throw httpError(allergiesResult.error.message || 'Lecture allergies impossible', 500)
+  if (consultationsResult.error) {
+    throw httpError(consultationsResult.error.message || 'Lecture consultations impossible', 500)
+  }
+  return {
+    ...patient,
+    allergies: allergiesResult.data ?? [],
+    recentConsultations: consultationsResult.data ?? [],
+  }
 }
 
 export async function updatePatientDossier(accessToken, patientId, payload, env) {
   const { admin, profile } = await requireStaff(accessToken, ['admin', 'doctor'], env)
   await getPatient(admin, patientId, profile.establishment_id)
-  const updates = pick(payload, PATIENT_FIELDS)
+  const hasMedicalColumn = await supportsMedicalHistoryColumn(admin)
+  const updates = packPatientHistories(normalizePatientPayload(payload), hasMedicalColumn)
   if (payload.firstName !== undefined) updates.first_name = text(payload.firstName)
   if (payload.lastName !== undefined) updates.last_name = text(payload.lastName)
+  delete updates.id
+  delete updates.access_code
+  delete updates.establishment_id
   if (Object.keys(updates).length) {
     const { error } = await admin.from('patients').update(updates).eq('id', patientId)
-    if (error) throw error
+    if (error) throw patientWriteError(error, 'Mise a jour patient impossible')
   }
   if (Array.isArray(payload.allergies)) {
     const { error: deleteError } = await admin.from('patient_allergies').delete().eq('patient_id', patientId)
-    if (deleteError) throw deleteError
-    const allergies = payload.allergies
-      .map((allergy) => ({
-        patient_id: patientId,
-        substance: text(allergy.substance),
-        severity: text(allergy.severity),
-        notes: text(allergy.notes) || null,
-      }))
-      .filter((allergy) => allergy.substance && ['mild', 'moderate', 'severe'].includes(allergy.severity))
+    if (deleteError) throw httpError(deleteError.message || 'Allergies non mises a jour')
+    const allergies = normalizeAllergies(patientId, payload.allergies)
     if (allergies.length) {
       const { error } = await admin.from('patient_allergies').insert(allergies)
-      if (error) throw error
+      if (error) throw httpError(error.message || 'Allergies non enregistrees')
     }
   }
   return getPatientDossier(accessToken, patientId, env)
@@ -566,10 +684,16 @@ export async function getPatientPortalByCode(code, env) {
     ? await admin.from('prescription_items').select('prescription_id, medication_name, posology, duration').in('prescription_id', ids)
     : { data: [], error: null }
   if (itemsError) throw itemsError
+  const presented = presentPatient(patient)
   return {
-    identity: pick(patient, ['first_name', 'last_name', 'birth_date', 'sex', 'phone']),
+    identity: pick(presented, ['first_name', 'last_name', 'birth_date', 'sex', 'phone']),
     allergies: allergies.data ?? [],
-    chronic: { personalHistory: patient.personal_history, familyHistory: patient.family_history, treatments: patient.chronic_treatments },
+    chronic: {
+      personalHistory: presented.personal_history,
+      medicalHistory: presented.medical_history || '',
+      familyHistory: presented.family_history,
+      treatments: presented.chronic_treatments,
+    },
     pastConsultations: (consultations.data ?? []).map((item) => ({ date: item.started_at, motif: item.motif, diagnosis: item.diagnosis })),
     prescriptions: (prescriptions.data ?? []).map((item) => ({
       date: item.created_at,

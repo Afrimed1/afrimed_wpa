@@ -90,14 +90,23 @@ async function main() {
         phone: '70111222',
         emergency_contact_name: 'Mariam Kaboré',
         emergency_contact_phone: '70222333',
-        personal_history: 'Paludisme 2023',
-        family_history: '',
+        personal_history: 'Tabac occasionnel',
+        medical_history: 'Paludisme 2023',
+        family_history: 'Diabète maternel',
         chronic_treatments: '',
+        motif: 'Fièvre',
+        history_of_illness: 'Fièvre et frissons depuis 3 jours, céphalées.',
         allergies: [{ substance: 'Pénicilline', severity: 'severe', notes: 'Urticaire' }],
       },
       process.env,
     )
     if (!patient?.access_code) throw new Error('code patient manquant')
+    if (!patient.medical_history && !String(patient.personal_history || '').includes('Paludisme')) {
+      throw new Error('antecedents medicaux absents')
+    }
+    if (!patient.initialConsultation?.motif && !patient.recentConsultations?.some((c) => c.motif === 'Fièvre')) {
+      throw new Error('motif initial non enregistre')
+    }
     pass(`Creation patient code=${patient.access_code}`)
   } catch (e) {
     fail('Creation patient', e)
