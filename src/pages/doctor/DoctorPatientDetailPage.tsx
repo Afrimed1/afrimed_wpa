@@ -171,6 +171,13 @@ export function DoctorPatientDetailPage() {
 
 function DossierSummary({ dossier }: { dossier: PatientDossier }) {
   const age = ageFromBirthDate(dossier.birth_date)
+  const latestClinical = dossier.recentConsultations.find(
+    (consultation) => consultation.motif || consultation.history_of_illness,
+  )
+  const clinicalCards = [
+    ['Motif de consultation', latestClinical?.motif || ''],
+    ['Histoire de la maladie', latestClinical?.history_of_illness || ''],
+  ]
   const history = [
     ['Antécédents personnels', dossier.personal_history],
     ['Antécédents médicaux', dossier.medical_history || ''],
@@ -189,6 +196,14 @@ function DossierSummary({ dossier }: { dossier: PatientDossier }) {
         <Info label="Téléphone" value={dossier.phone || 'Non renseigné'} />
         <Info label="Contact d’urgence" value={dossier.emergency_contact_name || 'Non renseigné'} />
         <Info label="Téléphone urgence" value={dossier.emergency_contact_phone || 'Non renseigné'} />
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        {clinicalCards.map(([label, value]) => (
+          <div key={label} className="card">
+            <h2 className="font-semibold text-primary">{label}</h2>
+            <p className="mt-3 whitespace-pre-wrap text-sm text-primary/70">{value || 'Non renseigné'}</p>
+          </div>
+        ))}
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         {history.map(([label, value]) => (

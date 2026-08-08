@@ -93,6 +93,7 @@ Offline, infirmier, SMS/email, dashboard national, vaccination/imagerie complete
 
 ## Journal
 
+- 2026-08-08 : Affiche motif + histoire maladie sur le dossier (apres infos admin, style cartes).
 - 2026-08-08 : Suivi aligne. Migration 004 appliquee. Fix 404 Vercel. Smoke prod OK. Push + deploy.
 - 2026-08-08 : Fix 404 dossier patient sur Vercel (routes API imbriquees + rewrite clinical-handler).
 - 2026-08-07 : Audit + correctifs dossier (age, motif/histoire, personnels/medicaux, sanitize create, E2E 19/19, deploy).

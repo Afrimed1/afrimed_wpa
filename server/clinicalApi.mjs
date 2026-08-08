@@ -292,7 +292,7 @@ export async function getPatientDossier(accessToken, patientId, env) {
     admin.from('patient_allergies').select('*').eq('patient_id', patientId).order('created_at', { ascending: false }),
     admin
       .from('consultations')
-      .select('id, status, motif, diagnosis, follow_up_date, follow_up_notes, started_at, closed_at, doctor_id')
+      .select('id, status, motif, history_of_illness, diagnosis, follow_up_date, follow_up_notes, started_at, closed_at, doctor_id')
       .eq('patient_id', patientId)
       .eq('establishment_id', profile.establishment_id)
       .order('started_at', { ascending: false })
