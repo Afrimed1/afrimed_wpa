@@ -20,12 +20,12 @@ export function AppShell({ children }: AppShellProps) {
   const navItems = getNavItems(user.role)
 
   const sidebar = (
-    <div className="flex h-full flex-col">
-      <div className="border-b border-white/10 px-5 py-5">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="shrink-0 border-b border-white/10 px-5 py-5">
         <Logo variant="light" size="sm" />
       </div>
 
-      <nav className="flex-1 space-y-1 px-3 py-4">
+      <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-4">
         {navItems.map((item) => (
           <NavLink
             key={item.path}
@@ -46,7 +46,7 @@ export function AppShell({ children }: AppShellProps) {
         ))}
       </nav>
 
-      <div className="border-t border-white/10 p-4">
+      <div className="shrink-0 border-t border-white/10 bg-primary p-4">
         <div className="mb-3 rounded-xl bg-white/10 px-3 py-2.5">
           <p className="truncate text-sm font-semibold text-white">{user.name}</p>
           <p className="text-xs text-white/60">{ROLE_LABELS[user.role]}</p>
@@ -69,8 +69,8 @@ export function AppShell({ children }: AppShellProps) {
   )
 
   return (
-    <div className="flex min-h-screen bg-surface">
-      <aside className="hidden w-64 shrink-0 bg-primary lg:block">{sidebar}</aside>
+    <div className="flex h-dvh overflow-hidden bg-surface">
+      <aside className="hidden h-full w-64 shrink-0 bg-primary lg:block">{sidebar}</aside>
 
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
@@ -80,10 +80,10 @@ export function AppShell({ children }: AppShellProps) {
             aria-label="Fermer le menu"
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="relative h-full w-72 max-w-[85vw] bg-primary shadow-elevated">
+          <aside className="relative flex h-full w-72 max-w-[85vw] flex-col bg-primary shadow-elevated">
             <button
               type="button"
-              className="absolute right-3 top-3 rounded-lg p-2 text-white/80 hover:bg-white/10"
+              className="absolute right-3 top-3 z-10 rounded-lg p-2 text-white/80 hover:bg-white/10"
               onClick={() => setMobileOpen(false)}
               aria-label="Fermer"
             >
@@ -94,8 +94,8 @@ export function AppShell({ children }: AppShellProps) {
         </div>
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-40 flex min-h-14 items-center justify-between border-b border-primary/8 bg-white/90 px-4 backdrop-blur-md sm:px-6">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-40 flex min-h-14 shrink-0 items-center justify-between border-b border-primary/8 bg-white/90 px-4 backdrop-blur-md sm:px-6">
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -126,7 +126,7 @@ export function AppShell({ children }: AppShellProps) {
           </div>
         </header>
 
-        <main className="flex-1 p-4 sm:p-6">{children}</main>
+        <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">{children}</main>
       </div>
     </div>
   )

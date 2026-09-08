@@ -21,13 +21,13 @@ const quickActions = [
     color: 'bg-primary/5 text-primary',
   },
   {
-    label: 'Nouveau dossier',
+    label: 'Nouveau patient',
     icon: Plus,
-    path: '/doctor/patients',
+    path: '/doctor/nouveau-patient',
     color: 'bg-secondary/10 text-secondary',
   },
   {
-    label: 'Nouvelle consultation',
+    label: 'Consultation',
     icon: Stethoscope,
     path: '/doctor/consultations',
     color: 'bg-secondary/10 text-secondary',
@@ -47,13 +47,13 @@ export function DoctorDashboard() {
   useEffect(() => { void load() }, [load])
 
   if (isDemoMode) {
-    return <div className="space-y-6"><div><h1 className="text-2xl font-bold text-primary">Tableau de bord</h1></div><div className="card border-secondary-200 bg-secondary-50"><p className="font-semibold text-primary">Les fonctionnalités cliniques nécessitent Supabase.</p><p className="mt-2 text-sm text-primary/70">Configurez Supabase pour accéder aux consultations, dossiers et résultats biologiques.</p></div></div>
+    return <div className="space-y-6"><div><h1 className="text-2xl font-bold text-primary">Accueil</h1></div><div className="card border-secondary-200 bg-secondary-50"><p className="font-semibold text-primary">Les fonctionnalités cliniques nécessitent Supabase.</p><p className="mt-2 text-sm text-primary/70">Configurez Supabase pour accéder aux consultations, dossiers et résultats biologiques.</p></div></div>
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-primary">Tableau de bord</h1>
+        <h1 className="text-2xl font-bold text-primary">Accueil</h1>
         <p className="mt-1 text-sm text-primary/60">
           Consultations du jour et alertes prioritaires
         </p>

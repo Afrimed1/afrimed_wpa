@@ -23,13 +23,14 @@ export function getNavItems(role: UserRole) {
       ]
     case 'doctor':
       return [
-        { label: 'Tableau de bord', path: '/doctor', icon: 'LayoutDashboard' },
+        { label: 'Accueil', path: '/doctor', icon: 'Home' },
+        { label: 'Nouveau patient', path: '/doctor/nouveau-patient', icon: 'UserPlus' },
         { label: 'Patients', path: '/doctor/patients', icon: 'UserSearch' },
-        {
-          label: 'Consultations',
-          path: '/doctor/consultations',
-          icon: 'Stethoscope',
-        },
+        { label: 'Consultation', path: '/doctor/consultations', icon: 'Stethoscope' },
+        { label: 'Rendez-vous', path: '/doctor/rendez-vous', icon: 'CalendarDays' },
+        { label: 'Dossier médical', path: '/doctor/dossier-medical', icon: 'FolderHeart' },
+        { label: 'Santé publique', path: '/doctor/sante-publique', icon: 'Globe2' },
+        { label: 'Paramètres', path: '/doctor/parametres', icon: 'Settings' },
       ]
     case 'lab':
       return [
