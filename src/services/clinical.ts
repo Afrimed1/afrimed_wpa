@@ -226,7 +226,11 @@ export function createPatient(input: PatientInput): Promise<PatientDossier & {
   initialConsultation?: Consultation | null
   warning?: string | null
 }> {
-  return clinicalFetch('/api/clinical/patients', {
+  type CreatedPatient = PatientDossier & {
+    initialConsultation?: Consultation | null
+    warning?: string | null
+  }
+  return clinicalFetch<CreatedPatient>('/api/clinical/patients', {
     method: 'POST',
     body: JSON.stringify(input),
   }).then((data) => {
@@ -392,7 +396,7 @@ export function listExamTypes(): Promise<LabExamType[]> {
 }
 
 export function createLabRequest(input: LabRequestInput): Promise<ConsultationLabRequest> {
-  return clinicalFetch('/api/clinical/lab-requests', {
+  return clinicalFetch<ConsultationLabRequest>('/api/clinical/lab-requests', {
     method: 'POST',
     body: JSON.stringify(input),
   }).then((data) => {
@@ -417,17 +421,20 @@ export function completeLabRequest(
   requestId: string,
   input: LabRequestCompletionInput,
 ): Promise<LabRequest> {
-  return clinicalFetch(`/api/clinical/lab-requests/${encodeURIComponent(requestId)}/complete`, {
-    method: 'POST',
-    body: JSON.stringify({ resultText: input.result_text }),
-  }).then((data) => {
+  return clinicalFetch<LabRequest>(
+    `/api/clinical/lab-requests/${encodeURIComponent(requestId)}/complete`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ resultText: input.result_text }),
+    },
+  ).then((data) => {
     if (data.consultation_id) invalidateConsultationRelated(data.consultation_id, data.patient_id)
     return data
   })
 }
 
 export function savePrescription(input: SavePrescriptionInput): Promise<Prescription> {
-  return clinicalFetch('/api/clinical/prescriptions', {
+  return clinicalFetch<Prescription>('/api/clinical/prescriptions', {
     method: 'POST',
     body: JSON.stringify(input),
   }).then((data) => {
