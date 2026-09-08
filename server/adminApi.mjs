@@ -1,8 +1,14 @@
 import { createClient } from '@supabase/supabase-js'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import ws from 'ws'
 
 const ESTABLISHMENT_ID = '00000000-0000-0000-0000-000000000001'
+
+/** Node < 22 n'a pas de WebSocket natif : requis par @supabase/supabase-js récent */
+const nodeRealtime = {
+  realtime: { transport: ws },
+}
 
 export function normalizeSupabaseUrl(raw) {
   return String(raw || '')
@@ -26,6 +32,7 @@ export function createAdminClient(env = process.env) {
   }
   return createClient(url, secret, {
     auth: { persistSession: false, autoRefreshToken: false },
+    ...nodeRealtime,
   })
 }
 
@@ -37,6 +44,7 @@ export function createUserClient(accessToken, env = process.env) {
   return createClient(url, publishable, {
     global: { headers: { Authorization: `Bearer ${accessToken}` } },
     auth: { persistSession: false, autoRefreshToken: false },
+    ...nodeRealtime,
   })
 }
 

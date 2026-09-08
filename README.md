@@ -16,12 +16,19 @@ https://afrimed-wpa.vercel.app
 
 ## Demarrage local
 
+Ce projet utilise **Node.js 22** (fichier `.nvmrc`), sans changer votre Node par défaut.
+
 ```bash
+cd afrimed_wpa
+nvm use          # active Node 22 uniquement dans ce terminal
 npm install
 npm run dev
 ```
 
 Sans `.env.local`, mode demo.
+
+> Si vous voyez `native WebSocket not found` : vous êtes encore en Node 20.
+> Relancez `nvm use` puis `npm run dev` dans ce dossier.
 
 ## Comptes
 

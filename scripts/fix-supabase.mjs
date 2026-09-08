@@ -5,6 +5,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createClient } from '@supabase/supabase-js'
+import ws from 'ws'
 import {
   createAdminClient,
   loadSupabaseEnv,
@@ -178,6 +179,7 @@ async function ensureReferenceData() {
 async function verifyLogins() {
   const client = createClient(url, publishable, {
     auth: { persistSession: false, autoRefreshToken: false },
+    realtime: { transport: ws },
   })
 
   for (const seed of STAFF_SEEDS) {

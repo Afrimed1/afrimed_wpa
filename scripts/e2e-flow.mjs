@@ -3,6 +3,7 @@
  * node --env-file=.env.local scripts/e2e-flow.mjs
  */
 import { createClient } from '@supabase/supabase-js'
+import ws from 'ws'
 import {
   createPatient,
   createConsultation,
@@ -41,6 +42,7 @@ async function login(email) {
   const { url, publishable } = loadSupabaseEnv(process.env)
   const client = createClient(url, publishable, {
     auth: { persistSession: false, autoRefreshToken: false },
+    realtime: { transport: ws },
   })
   const { data, error } = await client.auth.signInWithPassword({
     email,
