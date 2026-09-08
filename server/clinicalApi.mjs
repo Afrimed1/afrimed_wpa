@@ -25,6 +25,15 @@ const PATIENT_NULLABLE_TEXT = [
 const MEDICAL_HISTORY_MARKER = '\n\n---ANTECEDENTS_MEDICAUX---\n'
 let medicalHistoryColumnSupported = null
 
+/** Cache court session staff (évite auth.getUser + profiles à chaque requête) */
+const STAFF_CACHE_TTL_MS = 45_000
+const staffSessionCache = new Map()
+
+/** Cache référentiels peu volatils */
+const REF_CACHE_TTL_MS = 5 * 60_000
+let medicationsCache = null
+let examTypesCache = null
+
 const CONSULTATION_FIELDS = [
   'motif',
   'history_of_illness',
@@ -66,8 +75,18 @@ export function generateAccessCode() {
 }
 
 export async function requireStaff(accessToken, roles = STAFF_ROLES, env = process.env) {
+  const token = String(accessToken || '')
+  if (!token) throw httpError('Session invalide', 401)
+
+  const cached = staffSessionCache.get(token)
+  const now = Date.now()
+  if (cached && cached.expiresAt > now) {
+    if (!roles.includes(cached.profile.role)) throw httpError('Role non autorise', 403)
+    return { admin: createAdminClient(env), profile: cached.profile }
+  }
+
   const admin = createAdminClient(env)
-  const { data, error } = await admin.auth.getUser(accessToken)
+  const { data, error } = await admin.auth.getUser(token)
   if (error || !data.user) throw httpError('Session invalide', 401)
 
   const { data: profile, error: profileError } = await admin
@@ -80,6 +99,13 @@ export async function requireStaff(accessToken, roles = STAFF_ROLES, env = proce
     throw httpError('Profil du personnel non autorise', 403)
   }
   if (!roles.includes(profile.role)) throw httpError('Role non autorise', 403)
+
+  staffSessionCache.set(token, { profile, expiresAt: now + STAFF_CACHE_TTL_MS })
+  if (staffSessionCache.size > 200) {
+    for (const [key, value] of staffSessionCache) {
+      if (value.expiresAt <= now) staffSessionCache.delete(key)
+    }
+  }
   return { admin, profile }
 }
 
@@ -281,13 +307,33 @@ export async function createPatient(accessToken, payload, env) {
     }
   }
 
-  const dossier = await getPatientDossier(accessToken, created.id, env)
+  const dossier = await buildPatientDossier(admin, profile, created.id)
   return { ...dossier, initialConsultation: consultation, warning }
 }
 
 export async function getPatientDossier(accessToken, patientId, env) {
   const { admin, profile } = await requireStaff(accessToken, STAFF_ROLES, env)
+  return buildPatientDossier(admin, profile, patientId)
+}
+
+async function buildPatientDossier(admin, profile, patientId, { includeRecent = true } = {}) {
   const patient = await getPatient(admin, patientId, profile.establishment_id)
+  if (!includeRecent) {
+    const allergiesResult = await admin
+      .from('patient_allergies')
+      .select('*')
+      .eq('patient_id', patientId)
+      .order('created_at', { ascending: false })
+    if (allergiesResult.error) {
+      throw httpError(allergiesResult.error.message || 'Lecture allergies impossible', 500)
+    }
+    return {
+      ...patient,
+      allergies: allergiesResult.data ?? [],
+      recentConsultations: [],
+    }
+  }
+
   const [allergiesResult, consultationsResult] = await Promise.all([
     admin.from('patient_allergies').select('*').eq('patient_id', patientId).order('created_at', { ascending: false }),
     admin
@@ -332,7 +378,7 @@ export async function updatePatientDossier(accessToken, patientId, payload, env)
       if (error) throw httpError(error.message || 'Allergies non enregistrees')
     }
   }
-  return getPatientDossier(accessToken, patientId, env)
+  return buildPatientDossier(admin, profile, patientId)
 }
 
 export async function listConsultations(accessToken, filters = {}, env) {
@@ -369,21 +415,31 @@ export async function createConsultation(accessToken, { patientId }, env) {
   return data
 }
 
-export async function getConsultation(accessToken, id, env) {
+export async function getConsultation(accessToken, id, env, options = {}) {
+  const bootstrap = Boolean(options.bootstrap)
   const { admin, profile } = await requireStaff(accessToken, STAFF_ROLES, env)
   const consultation = await getConsultationRecord(admin, id, profile.establishment_id)
-  const [patientResult, labsResult, prescriptionsResult] = await Promise.all([
-    admin.from('patients').select('*').eq('id', consultation.patient_id).single(),
-    admin
-      .from('consultation_lab_requests')
-      .select('*, lab_exam_types(*)')
-      .eq('consultation_id', id)
-      .order('created_at', { ascending: false }),
-    admin.from('prescriptions').select('*').eq('consultation_id', id).order('created_at', { ascending: false }),
-  ])
+  const [patientResult, labsResult, prescriptionsResult, allergiesResult, medications, examTypes] =
+    await Promise.all([
+      admin.from('patients').select('*').eq('id', consultation.patient_id).single(),
+      admin
+        .from('consultation_lab_requests')
+        .select('*, lab_exam_types(*)')
+        .eq('consultation_id', id)
+        .order('created_at', { ascending: false }),
+      admin.from('prescriptions').select('*').eq('consultation_id', id).order('created_at', { ascending: false }),
+      admin
+        .from('patient_allergies')
+        .select('*')
+        .eq('patient_id', consultation.patient_id)
+        .order('created_at', { ascending: false }),
+      bootstrap ? loadMedicationsCached(admin) : Promise.resolve(null),
+      bootstrap ? loadExamTypesCached(admin) : Promise.resolve(null),
+    ])
   if (patientResult.error) throw patientResult.error
   if (labsResult.error) throw labsResult.error
   if (prescriptionsResult.error) throw prescriptionsResult.error
+  if (allergiesResult.error) throw httpError(allergiesResult.error.message || 'Lecture allergies impossible', 500)
   const prescriptionIds = (prescriptionsResult.data ?? []).map((item) => item.id)
   let items = []
   if (prescriptionIds.length) {
@@ -391,14 +447,27 @@ export async function getConsultation(accessToken, id, env) {
     if (error) throw error
     items = data ?? []
   }
+  const patient = presentPatient(patientResult.data)
+  const dossier = {
+    ...patient,
+    allergies: allergiesResult.data ?? [],
+    recentConsultations: [],
+  }
   return {
     ...consultation,
-    patient: patientResult.data,
+    patient,
+    dossier,
     labRequests: labsResult.data ?? [],
     prescriptions: (prescriptionsResult.data ?? []).map((prescription) => ({
       ...prescription,
       items: items.filter((item) => item.prescription_id === prescription.id),
     })),
+    ...(bootstrap
+      ? {
+          medications: medications ?? [],
+          examTypes: examTypes ?? [],
+        }
+      : {}),
   }
 }
 
@@ -408,9 +477,14 @@ export async function updateConsultation(accessToken, id, fields, env) {
   if (profile.role === 'doctor' && consultation.doctor_id !== profile.id) throw httpError('Consultation non autorisee', 403)
   const updates = pick(fields, CONSULTATION_FIELDS)
   if (!Object.keys(updates).length) throw httpError('Aucun champ clinique a mettre a jour')
-  const { error } = await admin.from('consultations').update(updates).eq('id', id)
+  const { data, error } = await admin
+    .from('consultations')
+    .update(updates)
+    .eq('id', id)
+    .select('*')
+    .single()
   if (error) throw error
-  return getConsultation(accessToken, id, env)
+  return data
 }
 
 export async function closeConsultation(accessToken, id, input, env) {
@@ -420,7 +494,7 @@ export async function closeConsultation(accessToken, id, input, env) {
   const diagnosis = text(input.diagnosis)
   const deferralReason = text(input.deferralReason)
   if (!diagnosis && !deferralReason) throw httpError('Diagnostic ou motif de report obligatoire')
-  const { error } = await admin
+  const { data, error } = await admin
     .from('consultations')
     .update({
       diagnosis: diagnosis || null,
@@ -431,22 +505,43 @@ export async function closeConsultation(accessToken, id, input, env) {
       closed_at: new Date().toISOString(),
     })
     .eq('id', id)
+    .select('*')
+    .single()
   if (error) throw error
-  return getConsultation(accessToken, id, env)
+  return data
+}
+
+async function loadMedicationsCached(admin) {
+  const now = Date.now()
+  if (medicationsCache && medicationsCache.expiresAt > now) return medicationsCache.data
+  const { data, error } = await admin.from('medications').select('*').eq('is_active', true).order('name')
+  if (error) throw error
+  medicationsCache = { data: data ?? [], expiresAt: now + REF_CACHE_TTL_MS }
+  return medicationsCache.data
+}
+
+async function loadExamTypesCached(admin) {
+  const now = Date.now()
+  if (examTypesCache && examTypesCache.expiresAt > now) return examTypesCache.data
+  const { data, error } = await admin
+    .from('lab_exam_types')
+    .select('*')
+    .eq('is_active', true)
+    .order('category')
+    .order('name')
+  if (error) throw error
+  examTypesCache = { data: data ?? [], expiresAt: now + REF_CACHE_TTL_MS }
+  return examTypesCache.data
 }
 
 export async function listMedications(accessToken, env) {
   const { admin } = await requireStaff(accessToken, STAFF_ROLES, env)
-  const { data, error } = await admin.from('medications').select('*').eq('is_active', true).order('name')
-  if (error) throw error
-  return data ?? []
+  return loadMedicationsCached(admin)
 }
 
 export async function listExamTypes(accessToken, env) {
   const { admin } = await requireStaff(accessToken, STAFF_ROLES, env)
-  const { data, error } = await admin.from('lab_exam_types').select('*').eq('is_active', true).order('category').order('name')
-  if (error) throw error
-  return data ?? []
+  return loadExamTypesCached(admin)
 }
 
 export async function createLabRequest(accessToken, { consultationId, examTypeId }, env) {

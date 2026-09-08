@@ -30,10 +30,20 @@ export function createAdminClient(env = process.env) {
   if (!url || !secret) {
     throw new Error('Supabase admin non configure (URL ou SUPABASE_SECRET_KEY)')
   }
-  return createClient(url, secret, {
+  const cacheKey = `${url}::${secret.slice(0, 12)}`
+  if (!globalThis.__afrimedAdminClients) {
+    globalThis.__afrimedAdminClients = new Map()
+  }
+  const cache = globalThis.__afrimedAdminClients
+  const existing = cache.get(cacheKey)
+  if (existing) return existing
+
+  const client = createClient(url, secret, {
     auth: { persistSession: false, autoRefreshToken: false },
     ...nodeRealtime,
   })
+  cache.set(cacheKey, client)
+  return client
 }
 
 export function createUserClient(accessToken, env = process.env) {

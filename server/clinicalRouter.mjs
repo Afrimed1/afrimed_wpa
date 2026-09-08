@@ -100,7 +100,11 @@ export async function handleClinicalRequest(req, res, { pathname, searchParams, 
     }
     const consultationMatch = pathname.match(/^\/api\/clinical\/consultations\/([^/]+)$/)
     if (consultationMatch && method === 'GET') {
-      send(res, 200, { data: await getConsultation(token, consultationMatch[1], env) })
+      send(res, 200, {
+        data: await getConsultation(token, consultationMatch[1], env, {
+          bootstrap: searchParams.get('bootstrap') === '1',
+        }),
+      })
       return true
     }
     if (consultationMatch && method === 'PUT') {
