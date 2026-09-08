@@ -55,12 +55,18 @@ export function DoctorConsultationsPage() {
 
   useEffect(() => {
     if (isDemoMode) return
+    const term = patientQuery.trim()
+    if (term.length < 2) {
+      setPatients([])
+      setSearching(false)
+      return
+    }
     let cancelled = false
     const timer = window.setTimeout(() => {
       void (async () => {
         setSearching(true)
         try {
-          const results = await searchPatients({ query: patientQuery, limit: 12 })
+          const results = await searchPatients({ query: term, limit: 12 })
           if (!cancelled) setPatients(results)
         } catch {
           if (!cancelled) setPatients([])
@@ -68,7 +74,7 @@ export function DoctorConsultationsPage() {
           if (!cancelled) setSearching(false)
         }
       })()
-    }, patientQuery ? 250 : 0)
+    }, 250)
     return () => {
       cancelled = true
       window.clearTimeout(timer)
@@ -120,9 +126,9 @@ export function DoctorConsultationsPage() {
           )}
           {!searching && patients.length === 0 && (
             <p className="py-3 text-sm text-primary/60">
-              {patientQuery
-                ? 'Aucun patient trouvé.'
-                : 'Saisissez un nom pour trouver un patient enregistré.'}
+              {patientQuery.trim().length < 2
+                ? 'Tapez au moins 2 caractères pour rechercher un patient.'
+                : 'Aucun patient trouvé.'}
             </p>
           )}
           {patients.map((patient) => (

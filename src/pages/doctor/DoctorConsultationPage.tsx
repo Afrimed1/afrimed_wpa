@@ -16,7 +16,6 @@ import {
   closeConsultation,
   createLabRequest,
   getConsultation,
-  getPatient,
   listExamTypes,
   listMedications,
   runAiSuggestions,
@@ -110,10 +109,21 @@ export function DoctorConsultationPage() {
     setConsultation(null)
     setDossier(null)
     try {
-      const detail = await getConsultation(id)
+      // Un seul aller-retour : consultation + dossier + référentiels
+      const detail = await getConsultation(id, { bootstrap: true })
+      const patient =
+        detail.dossier ||
+        ({
+          ...detail.patient,
+          allergies: [],
+          recentConsultations: [],
+        } as PatientDossier)
+
       setConsultation(detail)
-      const patient = await getPatient(detail.patient_id)
       setDossier(patient)
+      if (detail.medications) setMedications(detail.medications)
+      if (detail.examTypes) setExamTypes(detail.examTypes)
+
       const systems =
         detail.review_of_systems &&
         typeof detail.review_of_systems === 'object' &&
@@ -156,9 +166,18 @@ export function DoctorConsultationPage() {
         follow_up_date: detail.follow_up_date || '',
         follow_up_notes: detail.follow_up_notes || '',
       })
-      const [meds, exams] = await Promise.all([listMedications(), listExamTypes()])
-      setMedications(meds)
-      setExamTypes(exams)
+
+      // Compléter référentiels en arrière-plan si absents du bootstrap
+      if (!detail.medications || !detail.examTypes) {
+        void Promise.all([listMedications(), listExamTypes()])
+          .then(([meds, exams]) => {
+            setMedications(meds)
+            setExamTypes(exams)
+          })
+          .catch(() => {
+            /* non bloquant pour Interrogatoire */
+          })
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Consultation inaccessible.')
     } finally {
@@ -178,26 +197,28 @@ export function DoctorConsultationPage() {
       const histories = packAntecedentsIntoHistories(interrogatoire.antecedents)
       const { admin } = unpackAdministrativeInfo(dossier.personal_history)
       histories.personal_history = packAdministrativeInfo(histories.personal_history, admin)
-      const next = await updateConsultation(id, {
-        motif: interrogatoire.motif || null,
-        history_of_illness: interrogatoire.history_of_illness || null,
-        temperature_c: numberOrNull(form.temperature_c),
-        blood_pressure: form.blood_pressure || null,
-        pulse_bpm: numberOrNull(form.pulse_bpm),
-        weight_kg: numberOrNull(form.weight_kg),
-        height_cm: numberOrNull(form.height_cm),
-        review_of_systems: {
-          cardio: form.cardio,
-          respi: form.respi,
-          digestif: form.digestif,
-          neuro: form.neuro,
-          autre: form.autre,
-          antecedents: interrogatoire.antecedents,
-        },
-        physical_exam: form.physical_exam || null,
-        ai_decisions: aiDecisions,
-      })
-      const updatedPatient = await updatePatient(dossier.id, histories)
+      const [next, updatedPatient] = await Promise.all([
+        updateConsultation(id, {
+          motif: interrogatoire.motif || null,
+          history_of_illness: interrogatoire.history_of_illness || null,
+          temperature_c: numberOrNull(form.temperature_c),
+          blood_pressure: form.blood_pressure || null,
+          pulse_bpm: numberOrNull(form.pulse_bpm),
+          weight_kg: numberOrNull(form.weight_kg),
+          height_cm: numberOrNull(form.height_cm),
+          review_of_systems: {
+            cardio: form.cardio,
+            respi: form.respi,
+            digestif: form.digestif,
+            neuro: form.neuro,
+            autre: form.autre,
+            antecedents: interrogatoire.antecedents,
+          },
+          physical_exam: form.physical_exam || null,
+          ai_decisions: aiDecisions,
+        }),
+        updatePatient(dossier.id, histories),
+      ])
       setDossier(updatedPatient)
       setConsultation((current) => (current ? { ...current, ...next } : current))
     } catch (cause) {

@@ -8,7 +8,8 @@ import {
   type ReactNode,
 } from 'react'
 import { profileToAuthUser } from '@/lib/auth'
-import { getSupabase, isSupabaseConfigured } from '@/lib/supabase'
+import { clearAccessTokenCache, getSupabase, isSupabaseConfigured } from '@/lib/supabase'
+import { clearClinicalCache } from '@/lib/clinicalCache'
 import type { LoginResult, AuthUser, UserRole } from '@/types'
 import { DEMO_ACCOUNTS } from '@/types'
 import type { Profile } from '@/types/database'
@@ -283,6 +284,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     sessionStorage.removeItem(PATIENT_STORAGE_KEY)
+    clearAccessTokenCache()
+    clearClinicalCache()
     await getSupabase().auth.signOut()
     setUser(null)
   }, [isDemoMode, setDemoUser])

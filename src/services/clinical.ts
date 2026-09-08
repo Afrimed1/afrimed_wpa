@@ -1,3 +1,11 @@
+import {
+  ClinicalCacheKeys,
+  cacheGet,
+  cacheInvalidateKeys,
+  cacheInvalidatePrefix,
+  cacheSet,
+  clearClinicalCache,
+} from '@/lib/clinicalCache'
 import { getAccessToken } from '@/lib/supabase'
 import type {
   Consultation,
@@ -114,8 +122,11 @@ export interface PatientDossier extends Patient {
 
 export interface ConsultationDetail extends Consultation {
   patient: Patient
+  dossier?: PatientDossier
   labRequests: LabRequest[]
   prescriptions: Array<Prescription & { items: PrescriptionItem[] }>
+  medications?: Medication[]
+  examTypes?: LabExamType[]
 }
 
 export interface PatientPortalConsultation {
@@ -185,10 +196,30 @@ async function publicClinicalFetch<T>(path: string): Promise<T> {
   return (payload.data ?? payload) as T
 }
 
-export function searchPatients(options: SearchPatientsOptions = {}): Promise<Patient[]> {
-  return clinicalFetch(
-    withQuery('/api/clinical/patients', { q: options.query, limit: options.limit }),
+function invalidatePatientRelated(patientId?: string | null) {
+  cacheInvalidatePrefix('consultations:')
+  cacheInvalidatePrefix('patients:')
+  cacheInvalidateKeys(ClinicalCacheKeys.doctorDashboard())
+  if (patientId) cacheInvalidateKeys(ClinicalCacheKeys.patient(patientId))
+}
+
+function invalidateConsultationRelated(consultationId: string, patientId?: string | null) {
+  cacheInvalidateKeys(
+    ClinicalCacheKeys.consultation(consultationId, true),
+    ClinicalCacheKeys.consultation(consultationId, false),
   )
+  invalidatePatientRelated(patientId)
+}
+
+export function searchPatients(options: SearchPatientsOptions = {}): Promise<Patient[]> {
+  const key = ClinicalCacheKeys.patientsSearch(
+    JSON.stringify({ q: options.query || '', limit: options.limit || '' }),
+  )
+  const cached = cacheGet<Patient[]>(key)
+  if (cached) return Promise.resolve(cached)
+  return clinicalFetch<Patient[]>(
+    withQuery('/api/clinical/patients', { q: options.query, limit: options.limit }),
+  ).then((data) => cacheSet(key, data, 30_000))
 }
 
 export function createPatient(input: PatientInput): Promise<PatientDossier & {
@@ -198,65 +229,130 @@ export function createPatient(input: PatientInput): Promise<PatientDossier & {
   return clinicalFetch('/api/clinical/patients', {
     method: 'POST',
     body: JSON.stringify(input),
+  }).then((data) => {
+    invalidatePatientRelated(data.id)
+    if (data.initialConsultation?.id) {
+      invalidateConsultationRelated(data.initialConsultation.id, data.id)
+    }
+    cacheSet(ClinicalCacheKeys.patient(data.id), data)
+    return data
   })
 }
 
 export function getPatient(patientId: string): Promise<PatientDossier> {
-  return clinicalFetch(`/api/clinical/patients/${encodeURIComponent(patientId)}`)
+  const key = ClinicalCacheKeys.patient(patientId)
+  const cached = cacheGet<PatientDossier>(key)
+  if (cached) return Promise.resolve(cached)
+  return clinicalFetch<PatientDossier>(
+    `/api/clinical/patients/${encodeURIComponent(patientId)}`,
+  ).then((data) => cacheSet(key, data))
 }
 
 export function updatePatient(patientId: string, input: PatientUpdateInput): Promise<PatientDossier> {
-  return clinicalFetch(`/api/clinical/patients/${encodeURIComponent(patientId)}`, {
+  return clinicalFetch<PatientDossier>(`/api/clinical/patients/${encodeURIComponent(patientId)}`, {
     method: 'PUT',
     body: JSON.stringify(input),
+  }).then((data) => {
+    invalidatePatientRelated(patientId)
+    cacheInvalidatePrefix('consultation:')
+    return cacheSet(ClinicalCacheKeys.patient(patientId), data)
   })
 }
 
 export function listConsultations(
   options: ListConsultationsOptions = {},
 ): Promise<Consultation[]> {
-  return clinicalFetch(
+  const key = ClinicalCacheKeys.consultations(
+    JSON.stringify({
+      patientId: options.patientId || '',
+      status: options.status || '',
+      mine: Boolean(options.mine),
+    }),
+  )
+  const cached = cacheGet<Consultation[]>(key)
+  if (cached) return Promise.resolve(cached)
+  return clinicalFetch<Consultation[]>(
     withQuery('/api/clinical/consultations', {
       patientId: options.patientId,
       status: options.status,
       mine: options.mine ? 'true' : undefined,
     }),
-  )
+  ).then((data) => cacheSet(key, data, 30_000))
 }
 
 export function createConsultation(input: ConsultationInput): Promise<Consultation> {
-  return clinicalFetch('/api/clinical/consultations', {
+  return clinicalFetch<Consultation>('/api/clinical/consultations', {
     method: 'POST',
     body: JSON.stringify(input),
+  }).then((data) => {
+    invalidateConsultationRelated(data.id, input.patientId)
+    return data
   })
 }
 
-export function getConsultation(consultationId: string): Promise<ConsultationDetail> {
-  return clinicalFetch(`/api/clinical/consultations/${encodeURIComponent(consultationId)}`)
+export function getConsultation(
+  consultationId: string,
+  options: { bootstrap?: boolean } = {},
+): Promise<ConsultationDetail> {
+  const key = ClinicalCacheKeys.consultation(consultationId, Boolean(options.bootstrap))
+  const cached = cacheGet<ConsultationDetail>(key)
+  if (cached) return Promise.resolve(cached)
+  return clinicalFetch<ConsultationDetail>(
+    withQuery(`/api/clinical/consultations/${encodeURIComponent(consultationId)}`, {
+      bootstrap: options.bootstrap ? '1' : undefined,
+    }),
+  ).then((data) => {
+    cacheSet(key, data)
+    if (data.dossier) {
+      cacheSet(ClinicalCacheKeys.patient(data.patient_id), data.dossier)
+    }
+    if (data.medications) {
+      refCache.medications = { data: data.medications, expiresAt: Date.now() + 5 * 60_000 }
+    }
+    if (data.examTypes) {
+      refCache.examTypes = { data: data.examTypes, expiresAt: Date.now() + 5 * 60_000 }
+    }
+    return data
+  })
 }
 
 export function updateConsultation(
   consultationId: string,
   input: ConsultationUpdateInput,
 ): Promise<Consultation> {
-  return clinicalFetch(`/api/clinical/consultations/${encodeURIComponent(consultationId)}`, {
-    method: 'PUT',
-    body: JSON.stringify(input),
+  return clinicalFetch<Consultation>(
+    `/api/clinical/consultations/${encodeURIComponent(consultationId)}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    },
+  ).then((data) => {
+    invalidateConsultationRelated(consultationId, data.patient_id)
+    return data
   })
 }
 
 export function closeConsultation(
   consultationId: string,
-  input: Pick<ConsultationUpdateInput, 'diagnosis' | 'deferral_reason' | 'follow_up_date' | 'follow_up_notes'>,
-): Promise<ConsultationDetail> {
-  return clinicalFetch(`/api/clinical/consultations/${encodeURIComponent(consultationId)}/close`, {
-    method: 'POST',
-    body: JSON.stringify({
-      diagnosis: input.diagnosis,
-      deferralReason: input.deferral_reason,
-      followUpDate: input.follow_up_date,
-      followUpNotes: input.follow_up_notes,
-    }),
+  input: Pick<
+    ConsultationUpdateInput,
+    'diagnosis' | 'deferral_reason' | 'follow_up_date' | 'follow_up_notes'
+  >,
+): Promise<Consultation> {
+  return clinicalFetch<Consultation>(
+    `/api/clinical/consultations/${encodeURIComponent(consultationId)}/close`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        diagnosis: input.diagnosis,
+        deferralReason: input.deferral_reason,
+        followUpDate: input.follow_up_date,
+        followUpNotes: input.follow_up_notes,
+      }),
+    },
+  ).then((data) => {
+    invalidateConsultationRelated(consultationId, data.patient_id)
+    return data
   })
 }
 
@@ -267,18 +363,41 @@ export function runAiSuggestions(consultationId: string): Promise<AiSuggestionRe
   )
 }
 
+const refCache: {
+  medications: { data: Medication[]; expiresAt: number } | null
+  examTypes: { data: LabExamType[]; expiresAt: number } | null
+} = {
+  medications: null,
+  examTypes: null,
+}
+
 export function listMedications(): Promise<Medication[]> {
-  return clinicalFetch('/api/clinical/medications')
+  if (refCache.medications && refCache.medications.expiresAt > Date.now()) {
+    return Promise.resolve(refCache.medications.data)
+  }
+  return clinicalFetch<Medication[]>('/api/clinical/medications').then((data) => {
+    refCache.medications = { data, expiresAt: Date.now() + 5 * 60_000 }
+    return data
+  })
 }
 
 export function listExamTypes(): Promise<LabExamType[]> {
-  return clinicalFetch('/api/clinical/exam-types')
+  if (refCache.examTypes && refCache.examTypes.expiresAt > Date.now()) {
+    return Promise.resolve(refCache.examTypes.data)
+  }
+  return clinicalFetch<LabExamType[]>('/api/clinical/exam-types').then((data) => {
+    refCache.examTypes = { data, expiresAt: Date.now() + 5 * 60_000 }
+    return data
+  })
 }
 
 export function createLabRequest(input: LabRequestInput): Promise<ConsultationLabRequest> {
   return clinicalFetch('/api/clinical/lab-requests', {
     method: 'POST',
     body: JSON.stringify(input),
+  }).then((data) => {
+    invalidateConsultationRelated(input.consultationId)
+    return data
   })
 }
 
@@ -301,6 +420,9 @@ export function completeLabRequest(
   return clinicalFetch(`/api/clinical/lab-requests/${encodeURIComponent(requestId)}/complete`, {
     method: 'POST',
     body: JSON.stringify({ resultText: input.result_text }),
+  }).then((data) => {
+    if (data.consultation_id) invalidateConsultationRelated(data.consultation_id, data.patient_id)
+    return data
   })
 }
 
@@ -308,11 +430,19 @@ export function savePrescription(input: SavePrescriptionInput): Promise<Prescrip
   return clinicalFetch('/api/clinical/prescriptions', {
     method: 'POST',
     body: JSON.stringify(input),
+  }).then((data) => {
+    invalidateConsultationRelated(input.consultationId, input.patientId)
+    return data
   })
 }
 
 export function doctorDashboard(): Promise<DoctorDashboard> {
-  return clinicalFetch('/api/clinical/doctor-dashboard')
+  const key = ClinicalCacheKeys.doctorDashboard()
+  const cached = cacheGet<DoctorDashboard>(key)
+  if (cached) return Promise.resolve(cached)
+  return clinicalFetch<DoctorDashboard>('/api/clinical/doctor-dashboard').then((data) =>
+    cacheSet(key, data, 20_000),
+  )
 }
 
 export function adminStats(): Promise<AdminStats> {
@@ -324,3 +454,5 @@ export function patientPortal(code: string): Promise<PatientPortalData> {
     withQuery('/api/clinical/patient-portal', { code }),
   )
 }
+
+export { clearClinicalCache }

@@ -40,8 +40,25 @@ export function getSupabase(): SupabaseClient<Database> {
   return mainClient
 }
 
+let cachedAccessToken: { token: string; expiresAt: number } | null = null
+
 export async function getAccessToken(): Promise<string | null> {
   if (!isSupabaseConfigured) return null
+  const now = Date.now()
+  if (cachedAccessToken && cachedAccessToken.expiresAt > now) {
+    return cachedAccessToken.token
+  }
   const { data } = await getSupabase().auth.getSession()
-  return data.session?.access_token ?? null
+  const token = data.session?.access_token ?? null
+  if (token) {
+    // Cache court : évite getSession à chaque appel API pendant la navigation
+    cachedAccessToken = { token, expiresAt: now + 20_000 }
+  } else {
+    cachedAccessToken = null
+  }
+  return token
+}
+
+export function clearAccessTokenCache() {
+  cachedAccessToken = null
 }
