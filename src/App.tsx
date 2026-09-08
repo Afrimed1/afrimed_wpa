@@ -9,8 +9,12 @@ import { AdminUsersPage } from '@/pages/admin/AdminUsersPage'
 import { DoctorConsultationsPage } from '@/pages/doctor/DoctorConsultationsPage'
 import { DoctorConsultationPage } from '@/pages/doctor/DoctorConsultationPage'
 import { DoctorDashboard } from '@/pages/doctor/DoctorDashboard'
+import { DoctorAppointmentsPage } from '@/pages/doctor/DoctorAppointmentsPage'
+import { DoctorMedicalRecordPage } from '@/pages/doctor/DoctorMedicalRecordPage'
+import { DoctorNewPatientPage } from '@/pages/doctor/DoctorNewPatientPage'
 import { DoctorPatientDetailPage } from '@/pages/doctor/DoctorPatientDetailPage'
 import { DoctorPatientsPage } from '@/pages/doctor/DoctorPatientsPage'
+import { PlaceholderPage } from '@/pages/doctor/PlaceholderPage'
 import { LabDashboard } from '@/pages/lab/LabDashboard'
 import { LabRequestsPage } from '@/pages/lab/LabRequestsPage'
 import { LoginPage } from '@/pages/LoginPage'
@@ -36,6 +40,7 @@ export default function App() {
 
       <Route element={<ProtectedRoute allowedRoles={['doctor']} />}>
         <Route path="/doctor" element={<DoctorDashboard />} />
+        <Route path="/doctor/nouveau-patient" element={<DoctorNewPatientPage />} />
         <Route path="/doctor/patients" element={<DoctorPatientsPage />} />
         <Route path="/doctor/patients/:id" element={<DoctorPatientDetailPage />} />
         <Route
@@ -45,6 +50,22 @@ export default function App() {
         <Route
           path="/doctor/consultations/:id"
           element={<DoctorConsultationPage />}
+        />
+        <Route
+          path="/doctor/rendez-vous"
+          element={<DoctorAppointmentsPage />}
+        />
+        <Route
+          path="/doctor/dossier-medical"
+          element={<DoctorMedicalRecordPage />}
+        />
+        <Route
+          path="/doctor/sante-publique"
+          element={<PlaceholderPage title="Santé publique" />}
+        />
+        <Route
+          path="/doctor/parametres"
+          element={<PlaceholderPage title="Paramètres" />}
         />
       </Route>
 
